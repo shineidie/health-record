@@ -56,6 +56,7 @@
   .badge { background: #e8f0fe; color: #3a6bc4; padding: 4px 9px; border-radius: 20px; font-size: 12px; }
   .badge.bp { background: #fde8f0; color: #c43a6b; }
   .badge.meal { background: #e8fde8; color: #3a8c3a; max-width: 100%; word-break: break-all; }
+  .badge.insulin { background: #e8fef5; color: #1a8c5a; }
   .badge.weight { background: #f0e8fe; color: #6a3ac4; }
   .badge.note { background: #fef8e8; color: #8c6a3a; }
   .required-mark { color: #e74c3c; font-size: 11px; margin-left: 4px; }
@@ -92,7 +93,7 @@
 
 <header>
   <h1>🩺 健康记录</h1>
-  <p>血糖 · 血压 · 体重 · 饮食</p>
+  <p>血糖 · 血压 · 胰岛素 · 体重 · 饮食</p>
 </header>
 
 <div class="tabs">
@@ -120,6 +121,26 @@
       <div class="field"><label>早餐后2小时</label><input type="number" id="bg-after-breakfast" placeholder="例: 7.8" step="0.1" class="required-field"></div>
       <div class="field"><label>午餐后2小时</label><input type="number" id="bg-after-lunch" placeholder="例: 7.2" step="0.1" class="required-field"></div>
       <div class="field"><label>晚餐后2小时</label><input type="number" id="bg-after-dinner" placeholder="例: 6.9" step="0.1" class="required-field"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💉 胰岛素记录 <span class="unit">单位(U)</span><span style="font-size:11px;color:#aaa;margin-left:4px">可选</span></div>
+    <div style="margin-bottom:10px">
+      <div style="font-size:12px;color:#888;margin-bottom:6px">短效胰岛素（饭前）</div>
+      <div class="grid-3">
+        <div class="field"><label>早餐前</label><input type="number" id="insulin-breakfast" placeholder="例: 8" step="1" min="0"></div>
+        <div class="field"><label>午餐前</label><input type="number" id="insulin-lunch" placeholder="例: 10" step="1" min="0"></div>
+        <div class="field"><label>晚餐前</label><input type="number" id="insulin-dinner" placeholder="例: 8" step="1" min="0"></div>
+      </div>
+    </div>
+    <div class="section-divider"></div>
+    <div>
+      <div style="font-size:12px;color:#888;margin-bottom:6px">长效胰岛素（睡前）</div>
+      <div class="field" style="max-width:160px">
+        <label>睡前注射</label>
+        <input type="number" id="insulin-basal" placeholder="例: 20" step="1" min="0">
+      </div>
     </div>
   </div>
 
@@ -182,7 +203,8 @@
         <option value="all">全部</option>
         <option value="bg">仅血糖</option>
         <option value="bp">仅血压</option>
-        <option value="weight">仅体重</option>
+        <option value="insulin">仅胰岛素</option>
+      <option value="weight">仅体重</option>
       <option value="meal">仅饮食</option>
       </select>
       <button class="btn btn-sm" onclick="doQuery()">查询</button>
@@ -224,6 +246,17 @@
       <span class="chip active" data-key="pmDia" onclick="toggleChip(this)">晚-低压</span>
     </div>
     <div class="chart-wrap"><canvas id="chart-bp"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💉 胰岛素趋势</div>
+    <div class="chart-selector" id="insulin-chips">
+      <span class="chip active" data-key="breakfast" onclick="toggleChip(this)">早餐前</span>
+      <span class="chip active" data-key="lunch" onclick="toggleChip(this)">午餐前</span>
+      <span class="chip active" data-key="dinner" onclick="toggleChip(this)">晚餐前</span>
+      <span class="chip active" data-key="basal" onclick="toggleChip(this)">睡前长效</span>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-insulin"></canvas></div>
   </div>
 
   <div class="card">
@@ -313,6 +346,12 @@ function saveRecord() {
       amSys: val('bp-am-sys'), amDia: val('bp-am-dia'),
       pmSys: val('bp-pm-sys'), pmDia: val('bp-pm-dia'),
     },
+    insulin: {
+      breakfast: val('insulin-breakfast'),
+      lunch: val('insulin-lunch'),
+      dinner: val('insulin-dinner'),
+      basal: val('insulin-basal'),
+    },
     weight: val('weight'),
     meal: {
       breakfast: txt('meal-breakfast'),
@@ -337,6 +376,7 @@ function saveRecord() {
     const old = data[idx];
     Object.keys(record.bg).forEach(k => { if (record.bg[k] !== null) old.bg[k] = record.bg[k]; });
     Object.keys(record.bp).forEach(k => { if (record.bp[k] !== null) old.bp[k] = record.bp[k]; });
+    Object.keys(record.insulin).forEach(k => { if (record.insulin[k] !== null) old.insulin[k] = record.insulin[k]; });
     if (record.weight !== null) old.weight = record.weight;
     Object.keys(record.meal).forEach(k => { if (record.meal[k]) old.meal[k] = record.meal[k]; });
     if (record.note) old.note = record.note;
@@ -351,7 +391,9 @@ function saveRecord() {
 
   // 清空输入
   ['bg-fasting','bg-after-breakfast','bg-after-lunch','bg-after-dinner',
-   'bp-am-sys','bp-am-dia','bp-pm-sys','bp-pm-dia','weight'].forEach(id => document.getElementById(id).value = '');
+   'bp-am-sys','bp-am-dia','bp-pm-sys','bp-pm-dia',
+   'insulin-breakfast','insulin-lunch','insulin-dinner','insulin-basal',
+   'weight'].forEach(id => document.getElementById(id).value = '');
   ['meal-breakfast','meal-lunch','meal-dinner','rec-note'].forEach(id => document.getElementById(id).value = '');
 }
 
@@ -376,6 +418,12 @@ function doQuery() {
     if (type === 'all' || type === 'bp') {
       Object.entries(r.bp||{}).forEach(([k,v]) => { if(v) badges += `<span class="badge bp">${bpLabels[k]}: ${v}</span>`; });
     }
+    if (type === 'all' || type === 'insulin') {
+      if(r.insulin?.breakfast) badges += `<span class="badge insulin">早餐前短效: ${r.insulin.breakfast}U</span>`;
+      if(r.insulin?.lunch) badges += `<span class="badge insulin">午餐前短效: ${r.insulin.lunch}U</span>`;
+      if(r.insulin?.dinner) badges += `<span class="badge insulin">晚餐前短效: ${r.insulin.dinner}U</span>`;
+      if(r.insulin?.basal) badges += `<span class="badge insulin">睡前长效: ${r.insulin.basal}U</span>`;
+    }
     if (type === 'all' || type === 'weight') {
       if(r.weight) badges += `<span class="badge weight">体重: ${r.weight} kg</span>`;
     }
@@ -389,7 +437,7 @@ function doQuery() {
   }).join('');
 }
 
-let chartBG = null, chartBP = null, chartWeight = null;
+let chartBG = null, chartBP = null, chartInsulin = null, chartWeight = null;
 const bgColors = ['#4a90d9','#e67e22','#2ecc71','#9b59b6'];
 const bpColors = ['#e74c3c','#e67e22','#c0392b','#d35400'];
 const bgKeys = ['fasting','afterBreakfast','afterLunch','afterDinner'];
@@ -412,7 +460,7 @@ function renderCharts() {
   const data = getData().filter(r => r.date >= start && r.date <= end).sort((a,b) => a.date.localeCompare(b.date));
 
   if (!data.length) {
-    ['chart-bg','chart-bp','chart-weight'].forEach(id => {
+    ['chart-bg','chart-bp','chart-insulin','chart-weight'].forEach(id => {
       const ctx = document.getElementById(id).getContext('2d');
       ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
     });
@@ -458,6 +506,30 @@ function renderCharts() {
       plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
       scales: {
         y: { title: { display: true, text: 'mmHg', font: { size: 11 } }, grid: { color: '#f0f2f5' } },
+        x: { ticks: { font: { size: 10 } }, grid: { color: '#f0f2f5' } }
+      }
+    }
+  });
+
+  // 胰岛素图
+  const activeInsulin = getActiveChips('insulin-chips');
+  const insulinKeys = ['breakfast','lunch','dinner','basal'];
+  const insulinNames = ['早餐前短效','午餐前短效','晚餐前短效','睡前长效'];
+  const insulinColors = ['#27ae60','#2980b9','#8e44ad','#e67e22'];
+  const insulinDatasets = insulinKeys.map((k,i) => ({
+    label: insulinNames[i], data: data.map(r => r.insulin?.[k] ?? null),
+    borderColor: insulinColors[i], backgroundColor: insulinColors[i]+'33',
+    tension: 0.3, pointRadius: 4, hidden: !activeInsulin.includes(k),
+    spanGaps: true
+  }));
+  if (chartInsulin) chartInsulin.destroy();
+  chartInsulin = new Chart(document.getElementById('chart-insulin'), {
+    type: 'line', data: { labels, datasets: insulinDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+      scales: {
+        y: { title: { display: true, text: '单位(U)', font: { size: 11 } }, grid: { color: '#f0f2f5' } },
         x: { ticks: { font: { size: 10 } }, grid: { color: '#f0f2f5' } }
       }
     }
@@ -561,7 +633,9 @@ function loadExistingRecord(date) {
   if (!r) {
     // 清空表单
     ['bg-fasting','bg-after-breakfast','bg-after-lunch','bg-after-dinner',
-     'bp-am-sys','bp-am-dia','bp-pm-sys','bp-pm-dia','weight'].forEach(id => document.getElementById(id).value = '');
+     'bp-am-sys','bp-am-dia','bp-pm-sys','bp-pm-dia',
+     'insulin-breakfast','insulin-lunch','insulin-dinner','insulin-basal',
+     'weight'].forEach(id => document.getElementById(id).value = '');
     ['meal-breakfast','meal-lunch','meal-dinner','rec-note'].forEach(id => document.getElementById(id).value = '');
     hint.style.display = 'none';
     return;
@@ -576,6 +650,10 @@ function loadExistingRecord(date) {
   setVal('bp-am-dia', r.bp?.amDia);
   setVal('bp-pm-sys', r.bp?.pmSys);
   setVal('bp-pm-dia', r.bp?.pmDia);
+  setVal('insulin-breakfast', r.insulin?.breakfast);
+  setVal('insulin-lunch', r.insulin?.lunch);
+  setVal('insulin-dinner', r.insulin?.dinner);
+  setVal('insulin-basal', r.insulin?.basal);
   setVal('weight', r.weight);
   document.getElementById('meal-breakfast').value = r.meal?.breakfast || '';
   document.getElementById('meal-lunch').value = r.meal?.lunch || '';
