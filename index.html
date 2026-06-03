@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>健康记录</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f5f7fa; color: #333; font-size: 15px; }
+
+  header { background: linear-gradient(135deg, #4a90d9, #357abd); color: white; padding: 16px 20px; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header p { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+
+  .tabs { display: flex; background: white; border-bottom: 1px solid #e8ecf0; position: sticky; top: 56px; z-index: 99; }
+  .tab { flex: 1; padding: 12px 8px; text-align: center; font-size: 13px; color: #888; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
+  .tab.active { color: #4a90d9; border-bottom-color: #4a90d9; font-weight: 600; }
+
+  .page { display: none; padding: 16px; }
+  .page.active { display: block; }
+
+  .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); }
+  .card-title { font-size: 14px; font-weight: 600; color: #4a90d9; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+
+  .date-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .date-row label { font-size: 13px; color: #666; white-space: nowrap; }
+  .date-row input[type="date"] { flex: 1; padding: 8px 10px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 14px; color: #333; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; color: #888; }
+  .field input, .field textarea { padding: 9px 10px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 14px; color: #333; width: 100%; }
+  .field input:focus, .field textarea:focus { outline: none; border-color: #4a90d9; }
+  .field textarea { resize: none; height: 60px; font-family: inherit; }
+  .unit { font-size: 11px; color: #aaa; }
+
+  .btn { width: 100%; padding: 13px; background: linear-gradient(135deg, #4a90d9, #357abd); color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+  .btn:active { opacity: 0.85; }
+  .btn-sm { padding: 7px 14px; font-size: 13px; border-radius: 8px; width: auto; }
+  .btn-outline { background: white; color: #4a90d9; border: 1px solid #4a90d9; }
+  .btn-danger { background: #ff5a5a; }
+
+  .section-divider { height: 1px; background: #f0f2f5; margin: 14px 0; }
+
+  /* 查询页 */
+  .filter-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .filter-row label { font-size: 13px; color: #666; white-space: nowrap; }
+  .filter-row input[type="date"], .filter-row select { padding: 8px 10px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 13px; flex: 1; min-width: 120px; }
+
+  .record-item { background: #f8fafc; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 3px solid #4a90d9; }
+  .record-date { font-size: 12px; color: #888; margin-bottom: 6px; }
+  .record-body { display: flex; flex-wrap: wrap; gap: 8px; }
+  .badge { background: #e8f0fe; color: #3a6bc4; padding: 4px 9px; border-radius: 20px; font-size: 12px; }
+  .badge.bp { background: #fde8f0; color: #c43a6b; }
+  .badge.meal { background: #e8fde8; color: #3a8c3a; max-width: 100%; word-break: break-all; }
+  .badge.weight { background: #f0e8fe; color: #6a3ac4; }
+  .badge.note { background: #fef8e8; color: #8c6a3a; }
+  .required-mark { color: #e74c3c; font-size: 11px; margin-left: 4px; }
+  .field input.required-field { border-color: #f0c0c0; }
+  .field input.required-field:focus { border-color: #e74c3c; }
+  .no-data { text-align: center; color: #bbb; padding: 30px; font-size: 14px; }
+
+  /* 图表页 */
+  .chart-wrap { position: relative; height: 220px; margin-top: 8px; }
+  .chart-selector { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip { padding: 5px 12px; border-radius: 20px; font-size: 12px; border: 1px solid #dde3ea; cursor: pointer; color: #666; background: white; }
+  .chip.active { background: #4a90d9; color: white; border-color: #4a90d9; }
+
+  .range-row { display: flex; gap: 6px; margin-bottom: 12px; align-items: center; }
+  .range-row label { font-size: 13px; color: #666; white-space: nowrap; }
+  .range-row input { padding: 7px 10px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 13px; flex: 1; }
+
+  /* 导出 */
+  .export-btn-row { display: flex; gap: 8px; margin-top: 8px; }
+
+  /* toast */
+  #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); color: white; padding: 10px 22px; border-radius: 20px; font-size: 14px; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+
+  .stats-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .stat-box { flex: 1; background: #f8fafc; border-radius: 10px; padding: 10px; text-align: center; }
+  .stat-box .val { font-size: 20px; font-weight: 700; color: #4a90d9; }
+  .stat-box .lbl { font-size: 11px; color: #aaa; margin-top: 2px; }
+
+  .empty-hint { text-align: center; padding: 20px; color: #ccc; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🩺 健康记录</h1>
+  <p>血糖 · 血压 · 体重 · 饮食</p>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('record')">📝 记录</div>
+  <div class="tab" onclick="switchTab('query')">🔍 查询</div>
+  <div class="tab" onclick="switchTab('chart')">📈 趋势</div>
+  <div class="tab" onclick="switchTab('export')">💾 备份</div>
+</div>
+
+<!-- 记录页 -->
+<div id="page-record" class="page active">
+  <div class="card">
+    <div class="card-title">📅 记录日期</div>
+    <div class="date-row">
+      <label>日期</label>
+      <input type="date" id="rec-date">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🩸 血糖记录 <span class="unit">mmol/L</span><span class="required-mark">* 必填至少一项</span></div>
+    <div class="grid-2">
+      <div class="field"><label>空腹（早餐前）</label><input type="number" id="bg-fasting" placeholder="例: 5.6" step="0.1" class="required-field"></div>
+      <div class="field"><label>早餐后2小时</label><input type="number" id="bg-after-breakfast" placeholder="例: 7.8" step="0.1" class="required-field"></div>
+      <div class="field"><label>午餐后2小时</label><input type="number" id="bg-after-lunch" placeholder="例: 7.2" step="0.1" class="required-field"></div>
+      <div class="field"><label>晚餐后2小时</label><input type="number" id="bg-after-dinner" placeholder="例: 6.9" step="0.1" class="required-field"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💓 血压记录 <span class="unit">mmHg</span><span class="required-mark">* 必填至少一组</span></div>
+    <div style="margin-bottom:10px">
+      <div style="font-size:12px;color:#888;margin-bottom:6px">早晨（起床后）</div>
+      <div class="grid-2">
+        <div class="field"><label>收缩压（高压）</label><input type="number" id="bp-am-sys" placeholder="例: 120" class="required-field"></div>
+        <div class="field"><label>舒张压（低压）</label><input type="number" id="bp-am-dia" placeholder="例: 80" class="required-field"></div>
+      </div>
+    </div>
+    <div class="section-divider"></div>
+    <div>
+      <div style="font-size:12px;color:#888;margin-bottom:6px">晚间（睡前）</div>
+      <div class="grid-2">
+        <div class="field"><label>收缩压（高压）</label><input type="number" id="bp-pm-sys" placeholder="例: 118" class="required-field"></div>
+        <div class="field"><label>舒张压（低压）</label><input type="number" id="bp-pm-dia" placeholder="例: 78" class="required-field"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⚖️ 体重 <span class="unit">kg</span><span style="font-size:11px;color:#aaa;margin-left:4px">可选</span></div>
+    <div class="field" style="max-width:160px">
+      <label>今日体重</label>
+      <input type="number" id="weight" placeholder="例: 68.5" step="0.1">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🍽️ 饮食记录 <span style="font-size:11px;color:#aaa;margin-left:4px">可选</span></div>
+    <div class="field" style="margin-bottom:10px"><label>早餐内容</label><textarea id="meal-breakfast" placeholder="例: 燕麦粥、鸡蛋、牛奶"></textarea></div>
+    <div class="field" style="margin-bottom:10px"><label>午餐内容</label><textarea id="meal-lunch" placeholder="例: 米饭、清蒸鱼、青菜"></textarea></div>
+    <div class="field"><label>晚餐内容</label><textarea id="meal-dinner" placeholder="例: 杂粮饭、豆腐、蔬菜汤"></textarea></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📝 备注 <span style="font-size:11px;color:#aaa;margin-left:4px">可选</span></div>
+    <div class="field"><textarea id="rec-note" placeholder="可记录用药情况、特殊症状等..." style="height:70px"></textarea></div>
+  </div>
+
+  <button class="btn" onclick="saveRecord()">保存记录</button>
+  <div style="height:20px"></div>
+</div>
+
+<!-- 查询页 -->
+<div id="page-query" class="page">
+  <div class="card">
+    <div class="card-title">🔍 筛选条件</div>
+    <div class="filter-row">
+      <label>从</label>
+      <input type="date" id="q-start">
+      <label>到</label>
+      <input type="date" id="q-end">
+    </div>
+    <div class="filter-row">
+      <label>类型</label>
+      <select id="q-type">
+        <option value="all">全部</option>
+        <option value="bg">仅血糖</option>
+        <option value="bp">仅血压</option>
+        <option value="weight">仅体重</option>
+      <option value="meal">仅饮食</option>
+      </select>
+      <button class="btn btn-sm" onclick="doQuery()">查询</button>
+    </div>
+  </div>
+  <div id="query-results"></div>
+</div>
+
+<!-- 趋势页 -->
+<div id="page-chart" class="page">
+  <div class="card">
+    <div class="card-title">📊 时间范围</div>
+    <div class="range-row">
+      <label>从</label>
+      <input type="date" id="c-start">
+      <label>到</label>
+      <input type="date" id="c-end">
+      <button class="btn btn-sm" onclick="renderCharts()">更新</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🩸 血糖趋势</div>
+    <div class="chart-selector" id="bg-chips">
+      <span class="chip active" data-key="fasting" onclick="toggleChip(this)">空腹</span>
+      <span class="chip active" data-key="afterBreakfast" onclick="toggleChip(this)">早餐后</span>
+      <span class="chip active" data-key="afterLunch" onclick="toggleChip(this)">午餐后</span>
+      <span class="chip active" data-key="afterDinner" onclick="toggleChip(this)">晚餐后</span>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-bg"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💓 血压趋势</div>
+    <div class="chart-selector" id="bp-chips">
+      <span class="chip active" data-key="amSys" onclick="toggleChip(this)">晨-高压</span>
+      <span class="chip active" data-key="amDia" onclick="toggleChip(this)">晨-低压</span>
+      <span class="chip active" data-key="pmSys" onclick="toggleChip(this)">晚-高压</span>
+      <span class="chip active" data-key="pmDia" onclick="toggleChip(this)">晚-低压</span>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-bp"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⚖️ 体重趋势</div>
+    <div class="chart-wrap"><canvas id="chart-weight"></canvas></div>
+  </div>
+</div>
+
+<!-- 备份页 -->
+<div id="page-export" class="page">
+  <div class="card">
+    <div class="card-title">📊 数据统计</div>
+    <div id="stats-display"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">💾 数据备份</div>
+    <p style="font-size:13px;color:#888;margin-bottom:14px;line-height:1.6">将所有数据导出为JSON文件保存到手机，换设备时可导入恢复。建议定期备份。</p>
+    <div class="export-btn-row">
+      <button class="btn" onclick="exportData()">导出备份文件</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">📂 导入数据</div>
+    <p style="font-size:13px;color:#888;margin-bottom:14px">选择之前导出的备份文件恢复数据。</p>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+    <button class="btn btn-outline" onclick="document.getElementById('import-file').click()">选择备份文件导入</button>
+  </div>
+  <div class="card">
+    <div class="card-title" style="color:#ff5a5a">⚠️ 危险操作</div>
+    <p style="font-size:13px;color:#888;margin-bottom:14px">清空所有记录，此操作不可恢复，请先备份。</p>
+    <button class="btn btn-danger" onclick="clearAllData()">清空所有数据</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'health_records_v1';
+
+// 初始化日期
+function initDates() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('rec-date').value = today;
+  // 近30天
+  const d30 = new Date(); d30.setDate(d30.getDate() - 30);
+  const d30s = d30.toISOString().split('T')[0];
+  document.getElementById('q-start').value = d30s;
+  document.getElementById('q-end').value = today;
+  document.getElementById('c-start').value = d30s;
+  document.getElementById('c-end').value = today;
+}
+
+function getData() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { return []; }
+}
+function setData(d) { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    const tabs = ['record','query','chart','export'];
+    el.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.getElementById('page-' + tab).classList.add('active');
+  if (tab === 'chart') renderCharts();
+  if (tab === 'export') renderStats();
+  if (tab === 'query') doQuery();
+}
+
+function saveRecord() {
+  const date = document.getElementById('rec-date').value;
+  if (!date) { toast('请选择日期'); return; }
+
+  const val = (id) => { const v = document.getElementById(id).value; return v ? parseFloat(v) : null; };
+  const txt = (id) => document.getElementById(id).value.trim();
+
+  const record = {
+    date,
+    bg: {
+      fasting: val('bg-fasting'),
+      afterBreakfast: val('bg-after-breakfast'),
+      afterLunch: val('bg-after-lunch'),
+      afterDinner: val('bg-after-dinner'),
+    },
+    bp: {
+      amSys: val('bp-am-sys'), amDia: val('bp-am-dia'),
+      pmSys: val('bp-pm-sys'), pmDia: val('bp-pm-dia'),
+    },
+    weight: val('weight'),
+    meal: {
+      breakfast: txt('meal-breakfast'),
+      lunch: txt('meal-lunch'),
+      dinner: txt('meal-dinner'),
+    },
+    note: txt('rec-note'),
+    savedAt: Date.now()
+  };
+
+  // 必填校验：血糖至少一项，血压至少一项
+  const hasBG = Object.values(record.bg).some(v => v !== null);
+  const hasBP = Object.values(record.bp).some(v => v !== null);
+  if (!hasBG && !hasBP) { toast('⚠️ 血糖和血压为必填项，请至少各填一项'); return; }
+  if (!hasBG) { toast('⚠️ 请填写至少一项血糖数据'); return; }
+  if (!hasBP) { toast('⚠️ 请填写至少一项血压数据'); return; }
+
+  const data = getData();
+  const idx = data.findIndex(r => r.date === date);
+  if (idx >= 0) {
+    // 合并已有记录
+    const old = data[idx];
+    Object.keys(record.bg).forEach(k => { if (record.bg[k] !== null) old.bg[k] = record.bg[k]; });
+    Object.keys(record.bp).forEach(k => { if (record.bp[k] !== null) old.bp[k] = record.bp[k]; });
+    if (record.weight !== null) old.weight = record.weight;
+    Object.keys(record.meal).forEach(k => { if (record.meal[k]) old.meal[k] = record.meal[k]; });
+    if (record.note) old.note = record.note;
+    old.savedAt = Date.now();
+    data[idx] = old;
+    toast('✅ 已更新 ' + date + ' 的记录');
+  } else {
+    data.push(record);
+    toast('✅ 已保存 ' + date + ' 的记录');
+  }
+  setData(data);
+
+  // 清空输入
+  ['bg-fasting','bg-after-breakfast','bg-after-lunch','bg-after-dinner',
+   'bp-am-sys','bp-am-dia','bp-pm-sys','bp-pm-dia','weight'].forEach(id => document.getElementById(id).value = '');
+  ['meal-breakfast','meal-lunch','meal-dinner','rec-note'].forEach(id => document.getElementById(id).value = '');
+}
+
+function doQuery() {
+  const start = document.getElementById('q-start').value;
+  const end = document.getElementById('q-end').value;
+  const type = document.getElementById('q-type').value;
+  const data = getData().filter(r => r.date >= start && r.date <= end)
+    .sort((a,b) => b.date.localeCompare(a.date));
+
+  const el = document.getElementById('query-results');
+  if (!data.length) { el.innerHTML = '<div class="no-data">该时间段暂无记录</div>'; return; }
+
+  const bgLabels = {fasting:'空腹', afterBreakfast:'早餐后', afterLunch:'午餐后', afterDinner:'晚餐后'};
+  const bpLabels = {amSys:'晨高压', amDia:'晨低压', pmSys:'晚高压', pmDia:'晚低压'};
+
+  el.innerHTML = data.map(r => {
+    let badges = '';
+    if (type === 'all' || type === 'bg') {
+      Object.entries(r.bg||{}).forEach(([k,v]) => { if(v) badges += `<span class="badge">${bgLabels[k]}: ${v}</span>`; });
+    }
+    if (type === 'all' || type === 'bp') {
+      Object.entries(r.bp||{}).forEach(([k,v]) => { if(v) badges += `<span class="badge bp">${bpLabels[k]}: ${v}</span>`; });
+    }
+    if (type === 'all' || type === 'weight') {
+      if(r.weight) badges += `<span class="badge weight">体重: ${r.weight} kg</span>`;
+    }
+    if (type === 'all' || type === 'meal') {
+      if(r.meal?.breakfast) badges += `<span class="badge meal">早: ${r.meal.breakfast}</span>`;
+      if(r.meal?.lunch) badges += `<span class="badge meal">午: ${r.meal.lunch}</span>`;
+      if(r.meal?.dinner) badges += `<span class="badge meal">晚: ${r.meal.dinner}</span>`;
+    }
+    if (r.note) badges += `<span class="badge note">备注: ${r.note}</span>`;
+    return `<div class="record-item"><div class="record-date">📅 ${r.date}</div><div class="record-body">${badges || '<span style="color:#ccc;font-size:12px">无相关数据</span>'}</div></div>`;
+  }).join('');
+}
+
+let chartBG = null, chartBP = null, chartWeight = null;
+const bgColors = ['#4a90d9','#e67e22','#2ecc71','#9b59b6'];
+const bpColors = ['#e74c3c','#e67e22','#c0392b','#d35400'];
+const bgKeys = ['fasting','afterBreakfast','afterLunch','afterDinner'];
+const bpKeys = ['amSys','amDia','pmSys','pmDia'];
+const bgNames = ['空腹','早餐后','午餐后','晚餐后'];
+const bpNames = ['晨-高压','晨-低压','晚-高压','晚-低压'];
+
+function toggleChip(el) {
+  el.classList.toggle('active');
+  renderCharts();
+}
+
+function getActiveChips(containerId) {
+  return [...document.querySelectorAll(`#${containerId} .chip.active`)].map(c => c.dataset.key);
+}
+
+function renderCharts() {
+  const start = document.getElementById('c-start').value;
+  const end = document.getElementById('c-end').value;
+  const data = getData().filter(r => r.date >= start && r.date <= end).sort((a,b) => a.date.localeCompare(b.date));
+
+  if (!data.length) {
+    ['chart-bg','chart-bp','chart-weight'].forEach(id => {
+      const ctx = document.getElementById(id).getContext('2d');
+      ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+    });
+    return;
+  }
+
+  const labels = data.map(r => r.date.slice(5)); // MM-DD
+
+  // 血糖图
+  const activeBG = getActiveChips('bg-chips');
+  const bgDatasets = bgKeys.map((k,i) => ({
+    label: bgNames[i], data: data.map(r => r.bg?.[k] ?? null),
+    borderColor: bgColors[i], backgroundColor: bgColors[i]+'33',
+    tension: 0.3, pointRadius: 4, hidden: !activeBG.includes(k),
+    spanGaps: true
+  }));
+  if (chartBG) chartBG.destroy();
+  chartBG = new Chart(document.getElementById('chart-bg'), {
+    type: 'line', data: { labels, datasets: bgDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+      scales: {
+        y: { title: { display: true, text: 'mmol/L', font: { size: 11 } }, grid: { color: '#f0f2f5' } },
+        x: { ticks: { font: { size: 10 } }, grid: { color: '#f0f2f5' } }
+      }
+    }
+  });
+
+  // 血压图
+  const activeBP = getActiveChips('bp-chips');
+  const bpDatasets = bpKeys.map((k,i) => ({
+    label: bpNames[i], data: data.map(r => r.bp?.[k] ?? null),
+    borderColor: bpColors[i], backgroundColor: bpColors[i]+'33',
+    tension: 0.3, pointRadius: 4, hidden: !activeBP.includes(k),
+    spanGaps: true
+  }));
+  if (chartBP) chartBP.destroy();
+  chartBP = new Chart(document.getElementById('chart-bp'), {
+    type: 'line', data: { labels, datasets: bpDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+      scales: {
+        y: { title: { display: true, text: 'mmHg', font: { size: 11 } }, grid: { color: '#f0f2f5' } },
+        x: { ticks: { font: { size: 10 } }, grid: { color: '#f0f2f5' } }
+      }
+    }
+  });
+
+  // 体重图
+  if (chartWeight) chartWeight.destroy();
+  chartWeight = new Chart(document.getElementById('chart-weight'), {
+    type: 'line',
+    data: { labels, datasets: [{
+      label: '体重', data: data.map(r => r.weight ?? null),
+      borderColor: '#9b59b6', backgroundColor: '#9b59b633',
+      tension: 0.3, pointRadius: 4, spanGaps: true
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { title: { display: true, text: 'kg', font: { size: 11 } }, grid: { color: '#f0f2f5' } },
+        x: { ticks: { font: { size: 10 } }, grid: { color: '#f0f2f5' } }
+      }
+    }
+  });
+}
+
+function renderStats() {
+  const data = getData();
+  const el = document.getElementById('stats-display');
+  if (!data.length) { el.innerHTML = '<div class="empty-hint">暂无记录</div>'; return; }
+
+  const days = data.length;
+  const bgVals = data.flatMap(r => Object.values(r.bg||{}).filter(v => v !== null));
+  const bpSys = data.flatMap(r => [r.bp?.amSys, r.bp?.pmSys].filter(v => v));
+  const weightVals = data.map(r => r.weight).filter(v => v);
+  const avgBG = bgVals.length ? (bgVals.reduce((a,b)=>a+b,0)/bgVals.length).toFixed(1) : '--';
+  const avgSys = bpSys.length ? Math.round(bpSys.reduce((a,b)=>a+b,0)/bpSys.length) : '--';
+  const latestWeight = weightVals.length ? weightVals[weightVals.length-1] + ' kg' : '--';
+  const latest = data.sort((a,b) => b.date.localeCompare(a.date))[0]?.date || '--';
+
+  el.innerHTML = `
+    <div class="stats-row">
+      <div class="stat-box"><div class="val">${days}</div><div class="lbl">记录天数</div></div>
+      <div class="stat-box"><div class="val">${avgBG}</div><div class="lbl">平均血糖</div></div>
+      <div class="stat-box"><div class="val">${avgSys}</div><div class="lbl">平均收缩压</div></div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-box"><div class="val" style="font-size:16px">${latestWeight}</div><div class="lbl">最近体重</div></div>
+    </div>
+    <div style="font-size:12px;color:#aaa;text-align:center">最近记录: ${latest}</div>
+  `;
+}
+
+function exportData() {
+  const data = getData();
+  if (!data.length) { toast('暂无数据可导出'); return; }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '健康记录备份_' + new Date().toISOString().split('T')[0] + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('✅ 已导出备份文件');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!Array.isArray(imported)) throw new Error();
+      const existing = getData();
+      const merged = [...existing];
+      let added = 0;
+      imported.forEach(r => {
+        if (!merged.find(x => x.date === r.date)) { merged.push(r); added++; }
+      });
+      merged.sort((a,b) => a.date.localeCompare(b.date));
+      setData(merged);
+      toast(`✅ 导入成功，新增 ${added} 条记录`);
+      renderStats();
+    } catch(e) { toast('❌ 文件格式错误'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function clearAllData() {
+  if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  toast('已清空所有数据');
+  renderStats();
+}
+
+// 启动
+initDates();
+</script>
+</body>
+</html>
