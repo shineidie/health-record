@@ -63,6 +63,12 @@
   .field input.required-field { border-color: #f0c0c0; }
   .field input.required-field:focus { border-color: #e74c3c; }
   .no-data { text-align: center; color: #bbb; padding: 30px; font-size: 14px; }
+  .recent-list { display: flex; flex-direction: column; gap: 10px; }
+  .recent-item { background: #f8fafc; border-radius: 10px; padding: 12px; border-left: 3px solid #4a90d9; }
+  .recent-date { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #444; margin-bottom: 8px; }
+  .recent-day { color: #888; font-size: 12px; font-weight: 400; }
+  .recent-metrics { display: flex; flex-wrap: wrap; gap: 7px; }
+  .recent-empty { color: #bbb; font-size: 12px; }
 
   /* 图表页 */
   .chart-wrap { position: relative; height: 220px; margin-top: 8px; }
@@ -190,6 +196,11 @@
 <!-- 查询页 -->
 <div id="page-query" class="page">
   <div class="card">
+    <div class="card-title">📌 近3日血糖 / 血压</div>
+    <div id="recent-3-days" class="recent-list"></div>
+  </div>
+
+  <div class="card">
     <div class="card-title">🔍 筛选条件</div>
     <div class="filter-row">
       <label>从</label>
@@ -309,6 +320,13 @@ function getData() {
 }
 function setData(d) { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
 
+function formatDateLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
@@ -324,7 +342,10 @@ function switchTab(tab) {
   document.getElementById('page-' + tab).classList.add('active');
   if (tab === 'chart') renderCharts();
   if (tab === 'export') renderStats();
-  if (tab === 'query') doQuery();
+  if (tab === 'query') {
+    renderRecentThreeDays();
+    doQuery();
+  }
 }
 
 function saveRecord() {
@@ -388,6 +409,7 @@ function saveRecord() {
     toast('✅ 已保存 ' + date + ' 的记录');
   }
   setData(data);
+  renderRecentThreeDays();
 
   // 清空输入
   ['bg-fasting','bg-after-breakfast','bg-after-lunch','bg-after-dinner',
@@ -395,6 +417,51 @@ function saveRecord() {
    'insulin-breakfast','insulin-lunch','insulin-dinner','insulin-basal',
    'weight'].forEach(id => document.getElementById(id).value = '');
   ['meal-breakfast','meal-lunch','meal-dinner','rec-note'].forEach(id => document.getElementById(id).value = '');
+}
+
+function renderRecentThreeDays() {
+  const el = document.getElementById('recent-3-days');
+  if (!el) return;
+
+  const hasValue = (v) => v !== null && v !== undefined && v !== '';
+  const bgLabels = {fasting:'空腹', afterBreakfast:'早餐后', afterLunch:'午餐后', afterDinner:'晚餐后'};
+  const weekLabels = ['周日','周一','周二','周三','周四','周五','周六'];
+  const byDate = new Map(getData().map(r => [r.date, r]));
+  const today = new Date();
+
+  el.innerHTML = [0, 1, 2].map(offset => {
+    const day = new Date(today);
+    day.setDate(today.getDate() - offset);
+    const date = formatDateLocal(day);
+    const r = byDate.get(date);
+    let badges = '';
+
+    if (r) {
+      Object.entries(r.bg || {}).forEach(([k, v]) => {
+        if (hasValue(v)) badges += `<span class="badge">${bgLabels[k]}: ${v} mmol/L</span>`;
+      });
+
+      const bpPairs = [
+        ['晨', r.bp?.amSys, r.bp?.amDia],
+        ['晚', r.bp?.pmSys, r.bp?.pmDia],
+      ];
+      bpPairs.forEach(([label, sys, dia]) => {
+        if (hasValue(sys) || hasValue(dia)) {
+          badges += `<span class="badge bp">${label}: ${hasValue(sys) ? sys : '--'}/${hasValue(dia) ? dia : '--'} mmHg</span>`;
+        }
+      });
+    }
+
+    return `
+      <div class="recent-item">
+        <div class="recent-date">
+          <span>${date}</span>
+          <span class="recent-day">${offset === 0 ? '今天' : offset === 1 ? '昨天' : '前天'} · ${weekLabels[day.getDay()]}</span>
+        </div>
+        <div class="recent-metrics">${badges || '<span class="recent-empty">暂无血糖/血压记录</span>'}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 function doQuery() {
@@ -612,6 +679,7 @@ function importData(event) {
       merged.sort((a,b) => a.date.localeCompare(b.date));
       setData(merged);
       toast(`✅ 导入成功，新增 ${added} 条记录`);
+      renderRecentThreeDays();
       renderStats();
     } catch(e) { toast('❌ 文件格式错误'); }
   };
@@ -623,6 +691,7 @@ function clearAllData() {
   if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return;
   localStorage.removeItem(STORAGE_KEY);
   toast('已清空所有数据');
+  renderRecentThreeDays();
   renderStats();
 }
 
@@ -665,6 +734,7 @@ function loadExistingRecord(date) {
 // 启动
 initDates();
 loadExistingRecord(document.getElementById('rec-date').value);
+renderRecentThreeDays();
 </script>
 </body>
 </html>
